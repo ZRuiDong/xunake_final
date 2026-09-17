@@ -1,0 +1,9 @@
+BEGIN;
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id SERIAL PRIMARY KEY,
+    actor VARCHAR(100) NOT NULL,
+    action VARCHAR(100) NOT NULL,
+    snapshot JSON NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+COMMIT;

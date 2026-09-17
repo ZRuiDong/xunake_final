@@ -1,0 +1,55 @@
+# Merge from repository root with docker-compose.yml; relative paths use that root.
+services:
+  postgres:
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    shm_size: 256mb
+    mem_limit: 3g
+
+  redis:
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$${REDIS_PASSWORD} redis-cli ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
+    mem_limit: 512m
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    env_file: ./backend/.env
+    environment:
+      PRODUCTION: "true"
+      LOGIN_REDIS_HOST: redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
+      DB_POOL_SIZE: "10"
+      DB_MAX_OVERFLOW: "5"
+      DB_POOL_TIMEOUT: "10"
+    expose: ["8000"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    mem_limit: 2g
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    restart: unless-stopped
+    ports: ["${WEB_BIND_ADDRESS:-127.0.0.1}:8080:80"]
+    depends_on:
+      backend:
+        condition: service_healthy
+    mem_limit: 512m
