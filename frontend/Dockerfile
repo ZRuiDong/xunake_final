@@ -1,7 +1,7 @@
-FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/node:24-alpine@sha256:d08b32cd3b4052dc3e5b67accb48a7dea41b8d1f3fdd4800491a1351131ff19a AS build
+FROM docker.io/library/node:24.21.0-alpine@sha256:be80f76cf40ec8e42b9bec49f60a55e0660f30af58d3e5a25530785b30ea67e2 AS build
 WORKDIR /frontend
 COPY frontend/package*.json ./
-RUN npm ci
+RUN npm ci --registry=https://registry.npmmirror.com --no-audit --no-fund --fetch-retries=5 --fetch-timeout=120000
 COPY frontend/ ./
 RUN npm run build
 
