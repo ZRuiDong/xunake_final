@@ -17,7 +17,6 @@ interface Student {
     id:number
     student_no:string
     name:string
-    weight:number
     selected_course_name:string | null
     selected_course_names:string[]
     selection_status:string | null
@@ -44,7 +43,7 @@ const selectedCount=computed(()=>selectAllMatching.value
 const dialogVisible=ref(false)
 const editMode=ref(false)
 const editingStudentId=ref(0)
-const form=ref({student_no:"", name:"", password:"", weight:0})
+const form=ref({student_no:"", name:"", password:""})
 
 const passwordVisible=ref(false)
 const passwordLoading=ref(false)
@@ -199,7 +198,7 @@ function deleteStudent(student:Student){
 function openCreate(){
     editMode.value=false
     editingStudentId.value=0
-    form.value={student_no:"", name:"", password:"", weight:0}
+    form.value={student_no:"", name:"", password:""}
     dialogVisible.value=true
 }
 
@@ -209,8 +208,7 @@ function openEdit(student:Student){
     form.value={
         student_no:student.student_no,
         name:student.name,
-        password:"",
-        weight:student.weight
+        password:""
     }
     dialogVisible.value=true
 }
@@ -228,8 +226,7 @@ async function save(){
         if(editMode.value){
             await updateStudent(editingStudentId.value, {
                 student_no:form.value.student_no.trim(),
-                name:form.value.name.trim(),
-                weight:form.value.weight
+                name:form.value.name.trim()
             })
         }else{
             await createStudent({
@@ -395,7 +392,6 @@ onMounted(loadStudents)
         <el-table-column prop="id" label="ID" width="70" />
         <el-table-column prop="student_no" label="学号" min-width="120" />
         <el-table-column prop="name" label="姓名" min-width="100" />
-        <el-table-column prop="weight" label="权重" width="85" />
         <el-table-column label="已选课程" min-width="130">
             <template #default="scope">
                 {{scope.row.selected_course_names?.join("、") || scope.row.selected_course_name || "-"}}
@@ -434,7 +430,6 @@ onMounted(loadStudents)
             <el-form-item v-if="!editMode" label="密码" required>
                 <el-input v-model="form.password" type="password" show-password />
             </el-form-item>
-            <el-form-item label="权重" required><el-input-number v-model="form.weight" /></el-form-item>
         </el-form>
         <template #footer>
             <el-button @click="dialogVisible=false">取消</el-button>

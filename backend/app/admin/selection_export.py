@@ -112,7 +112,6 @@ def _ranking_rows(course, ranking):
             display_rank,
             item.Student.student_no,
             item.Student.name,
-            item.Student.weight,
             STATUS_LABELS.get(status, status),
             item.Selection.selected_time,
             note,
@@ -168,13 +167,13 @@ def build_period_selection_workbook(period, courses, rankings_by_course):
                 summary.cell(row=row, column=column).fill = WARNING_FILL
 
     details = workbook.create_sheet("选课明细")
-    _style_title(details, f"{period.name} · 学生选课明细", 11)
-    _style_metadata(details, _period_metadata(period), 11)
+    _style_title(details, f"{period.name} · 学生选课明细", 10)
+    _style_metadata(details, _period_metadata(period), 10)
     _write_table(
         details,
-        ["课程名称", "教师", "上课时间", "地点", "排名", "学号", "姓名", "权重", "选课状态", "选课时间", "备注"],
+        ["课程名称", "教师", "上课时间", "地点", "排名", "学号", "姓名", "选课状态", "选课时间", "备注"],
         detail_rows,
-        [24, 14, 22, 18, 9, 18, 14, 10, 12, 22, 14],
+        [24, 14, 22, 18, 9, 18, 14, 12, 22, 14],
     )
 
     output = BytesIO()
@@ -186,7 +185,7 @@ def build_course_selection_workbook(period, course, ranking):
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "选课名单"
-    _style_title(sheet, f"{course.name} · 选课情况", 7)
+    _style_title(sheet, f"{course.name} · 选课情况", 6)
 
     admitted_count = sum(
         1 for item in ranking if item.Selection.status in ("SELECTED", "FINAL")
@@ -205,14 +204,14 @@ def build_course_selection_workbook(period, course, ranking):
         f"教师：{course.instructor or '-'}    时间：{course.schedule or '-'}    "
         f"地点：{course.location or '-'}"
     )
-    _style_metadata(sheet, metadata, 7)
+    _style_metadata(sheet, metadata, 6)
 
     rows = [row[4:] for row in _ranking_rows(course, ranking)]
     _write_table(
         sheet,
-        ["排名", "学号", "姓名", "权重", "选课状态", "选课时间", "备注"],
+        ["排名", "学号", "姓名", "选课状态", "选课时间", "备注"],
         rows,
-        [9, 18, 14, 10, 12, 22, 14],
+        [9, 18, 14, 12, 22, 14],
     )
 
     output = BytesIO()

@@ -44,7 +44,6 @@ class PaginationDeletionTest(unittest.TestCase):
                 user_id=user.id,
                 student_no=f"S{index:03d}",
                 name=f"测试学生{index}",
-                weight=index,
             )
             self.db.add(student)
             self.students.append(student)

@@ -1,4 +1,4 @@
-from sqlalchemy import case, text
+from sqlalchemy import case, func, text
 from sqlalchemy.orm import Session
 
 from app.models.course import Course
@@ -23,7 +23,7 @@ def calculate_ranking(
     return records.order_by(
         case((Selection.status == "FINAL", 0),
              (Selection.status == "REJECTED", 2), else_=1),
-        Student.weight.desc(), Selection.selected_time, Selection.id,
+        Selection.selected_time, Selection.id,
     ).populate_existing().all()
 
 
@@ -35,14 +35,13 @@ def update_selection_status(course_id: int, db: Session, commit: bool = True):
         db.execute(text("""
             WITH ranked AS (
                 SELECT s.id, row_number() OVER (
-                    ORDER BY st.weight DESC, s.selected_time, s.id
+                    ORDER BY s.selected_time, s.id
                 )::integer AS position,
                 greatest(c.capacity - (
                     SELECT count(*) FROM selections f
                     WHERE f.course_id = c.id AND f.status = 'FINAL'
                 ), 0) AS slots
-                FROM selections s JOIN students st ON st.id = s.student_id
-                JOIN courses c ON c.id = s.course_id
+                FROM selections s JOIN courses c ON c.id = s.course_id
                 WHERE s.course_id = :course_id
                   AND s.status IN ('SELECTED', 'WAITING')
             ), desired AS (
@@ -51,10 +50,10 @@ def update_selection_status(course_id: int, db: Session, commit: bool = True):
                          ELSE 'WAITING' END AS status
                 FROM ranked
             )
-            UPDATE selections s SET status = d.status, queue_position = d.position
+            UPDATE selections s SET status = d.status, queue_position = NULL
             FROM desired d WHERE s.id = d.id
               AND (s.status IS DISTINCT FROM d.status
-                   OR s.queue_position IS DISTINCT FROM d.position)
+                   OR s.queue_position IS NOT NULL)
         """), {"course_id": course_id})
         db.execute(text("""UPDATE selections SET queue_position = NULL
             WHERE course_id = :course_id AND status = 'FINAL'
@@ -86,10 +85,70 @@ def update_selection_status(course_id: int, db: Session, commit: bool = True):
             continue
 
         queue_position += 1
-        selection.queue_position = queue_position
+        # Ranking is calculated on demand. Persisting every queue position
+        # turns one application into hundreds of row writes on a hot course.
+        selection.queue_position = None
         selection.status = (
             "SELECTED" if queue_position <= available_slots else "WAITING"
         )
 
     if commit:
         db.commit()
+
+
+def insert_selection_into_ranking(
+    course: Course,
+    selection: Selection,
+    db: Session,
+):
+    """Admit immediately when capacity remains; otherwise join the waitlist.
+
+    The caller must hold a FOR UPDATE lock on the course row. This makes the
+    first-come-first-served decision atomic for concurrent requests.
+    """
+    db.flush()
+    admitted_count = db.query(func.count(Selection.id)).filter(
+        Selection.course_id == course.id,
+        Selection.status.in_(["SELECTED", "FINAL"]),
+        Selection.id != selection.id,
+    ).scalar()
+
+    selection.queue_position = None
+    selection.status = (
+        "SELECTED" if admitted_count < course.capacity else "WAITING"
+    )
+
+
+def remove_selection_from_ranking(
+    course: Course,
+    removed_status: str,
+    db: Session,
+):
+    """Promote the best waiting student when an admitted student withdraws.
+
+    The caller must hold the course lock and must flush the deletion first.
+    """
+    if removed_status != "SELECTED":
+        return
+    final_count = db.query(func.count(Selection.id)).filter(
+        Selection.course_id == course.id,
+        Selection.status == "FINAL",
+    ).scalar()
+    slots = max(course.capacity - final_count, 0)
+    selected_count = db.query(func.count(Selection.id)).filter(
+        Selection.course_id == course.id,
+        Selection.status == "SELECTED",
+    ).scalar()
+    if selected_count >= slots:
+        return
+
+    promoted = db.query(Selection).filter(
+        Selection.course_id == course.id,
+        Selection.status == "WAITING",
+    ).order_by(
+        Selection.selected_time,
+        Selection.id,
+    ).first()
+    if promoted:
+        promoted.status = "SELECTED"
+        promoted.queue_position = None

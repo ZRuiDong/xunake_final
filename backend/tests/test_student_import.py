@@ -17,7 +17,7 @@ from app.database import Base
 from app.models import Student, User
 
 
-def workbook_bytes(rows, headers=("学号", "姓名", "权重")):
+def workbook_bytes(rows, headers=("学号", "姓名")):
     workbook = Workbook()
     sheet = workbook.active
     sheet.append(headers)
@@ -38,18 +38,18 @@ class StudentImportTest(unittest.IsolatedAsyncioTestCase):
         self.db.close()
         self.engine.dispose()
 
-    def test_download_template_has_exactly_three_headers(self):
+    def test_download_template_has_exactly_two_headers(self):
         workbook = load_workbook(BytesIO(build_student_template()), read_only=True)
         sheet = workbook.active
-        headers = tuple(sheet.cell(1, column).value for column in range(1, 4))
-        self.assertEqual(headers, ("学号", "姓名", "权重"))
-        self.assertEqual(sheet.max_column, 3)
+        headers = tuple(sheet.cell(1, column).value for column in range(1, 3))
+        self.assertEqual(headers, ("学号", "姓名"))
+        self.assertEqual(sheet.max_column, 2)
         workbook.close()
 
     def test_parser_reports_row_number_for_duplicate_student_number(self):
         content = workbook_bytes([
-            ("2027001", "学生甲", 10),
-            ("2027001", "学生乙", 20),
+            ("2027001", "学生甲"),
+            ("2027001", "学生乙"),
         ])
 
         with self.assertRaises(StudentImportValidationError) as context:
@@ -58,10 +58,21 @@ class StudentImportTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("第 3 行", context.exception.errors[0])
         self.assertIn("重复", context.exception.errors[0])
 
+    def test_old_three_column_template_is_rejected(self):
+        content = workbook_bytes(
+            [("2027001", "学生甲", 10)],
+            headers=("学号", "姓名", "权重"),
+        )
+
+        with self.assertRaises(StudentImportValidationError) as context:
+            parse_student_workbook(content)
+
+        self.assertTrue(any("两列" in error for error in context.exception.errors))
+
     async def test_valid_workbook_imports_all_students(self):
         content = workbook_bytes([
-            ("2027001", "学生甲", 10),
-            ("2027002", "学生乙", 20.5),
+            ("2027001", "学生甲"),
+            ("2027002", "学生乙"),
         ])
         upload = UploadFile(filename="students.xlsx", file=BytesIO(content))
 
@@ -81,13 +92,12 @@ class StudentImportTest(unittest.IsolatedAsyncioTestCase):
             user_id=user.id,
             student_no="2027001",
             name="已存在学生",
-            weight=0,
         ))
         self.db.commit()
 
         content = workbook_bytes([
-            ("2027001", "重复学生", 10),
-            ("2027002", "新学生", 20),
+            ("2027001", "重复学生"),
+            ("2027002", "新学生"),
         ])
         upload = UploadFile(filename="students.xlsx", file=BytesIO(content))
 

@@ -39,3 +39,4 @@ PostgreSQL URI or explicit host/user/database flags instead.
 004: two active applications/final enrollments per student.
 005: avoid student locks during reranking; indexes and fresh-install guards.
 006: deletion audit snapshots, without passwords or cascading foreign keys.
+007: first-come-first-served ordering and on-demand ranks without write amplification.

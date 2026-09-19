@@ -49,7 +49,7 @@ if __name__ == "__main__":
             db.add(user)
             db.flush()
             db.add(Student(user_id=user.id, student_no=user.username,
-                           name=f"Load student {i}", weight=i % 101))
+                           name=f"Load student {i}"))
             accounts.append({"username": user.username, "token": create_token(user)})
         db.commit()
     # Runtime fixture, contains authentication tokens. Exclusive creation protects

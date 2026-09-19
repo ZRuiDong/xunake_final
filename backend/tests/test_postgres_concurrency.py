@@ -54,7 +54,7 @@ class PostgreSQLConcurrencyTest(unittest.TestCase):
                 db.add(user)
                 db.flush()
                 student = Student(user_id=user.id, student_no=user.username,
-                                  name=user.username, weight=i)
+                                  name=user.username)
                 db.add(student)
                 db.flush()
                 self.student_ids.append(student.id)
@@ -133,10 +133,16 @@ class PostgreSQLConcurrencyTest(unittest.TestCase):
             migrate.upgrade(initialize=True)
         with self.engine.connect() as connection:
             versions = set(connection.execute(text("SELECT version FROM schema_migrations")).scalars())
-            self.assertEqual(versions, {"001", "002", "003", "004", "005", "006"})
+            self.assertEqual(
+                versions,
+                {"001", "002", "003", "004", "005", "006", "007"},
+            )
             self.assertEqual(connection.execute(text("SELECT count(*) FROM pg_trigger WHERE tgname='trg_student_selection_limit' AND tgrelid='selections'::regclass")).scalar(), 1)
             self.assertIsNotNone(connection.execute(text("SELECT to_regclass('uq_periods_single_open')")).scalar())
             self.assertIsNotNone(connection.execute(text("SELECT to_regclass('audit_logs')")).scalar())
+            self.assertIsNotNone(connection.execute(text(
+                "SELECT to_regclass('ix_selections_course_status_time_id')"
+            )).scalar())
 
     def test_migrations_are_not_replayed_after_enabling_two_courses(self):
         self.choose(0, self.course_ids[0])
@@ -147,14 +153,18 @@ class PostgreSQLConcurrencyTest(unittest.TestCase):
         with self.Session() as db:
             self.assertEqual(db.query(Selection).count(), 2)
 
-    def test_hot_course_has_correct_weight_ranking_without_over_enrollment(self):
+    def test_hot_course_preserves_first_come_order_without_over_enrollment(self):
         with ThreadPoolExecutor(max_workers=12) as executor:
             results = list(executor.map(lambda i: self.choose(i, self.course_ids[0]), range(12)))
         self.assertTrue(all(result in ("SELECTED", "WAITING") for result in results))
         with self.Session() as db:
-            winners = db.query(Selection).filter(Selection.status == "SELECTED").all()
-            self.assertEqual({s.student_id for s in winners}, set(self.student_ids[-2:]))
-            self.assertEqual(db.query(Selection).count(), 12)
+            queue = db.query(Selection).order_by(
+                Selection.selected_time,
+                Selection.id,
+            ).all()
+            self.assertEqual([item.status for item in queue[:2]], ["SELECTED", "SELECTED"])
+            self.assertTrue(all(item.status == "WAITING" for item in queue[2:]))
+            self.assertEqual(len(queue), 12)
 
     def test_capacity_reranking_does_not_lock_other_students(self):
         self.choose(0, self.course_ids[0])

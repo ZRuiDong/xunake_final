@@ -18,12 +18,17 @@ queries = {
         WHERE s.status IN ('SELECTED','FINAL') GROUP BY c.id, c.capacity
         HAVING count(*) > c.capacity) x""",
     "ranking_mismatch": """WITH ranked AS (
-        SELECT s.status, s.queue_position, c.capacity,
-            row_number() OVER (PARTITION BY s.course_id ORDER BY st.weight DESC, s.selected_time, s.id) AS position
-        FROM selections s JOIN students st ON st.id=s.student_id
-        JOIN courses c ON c.id=s.course_id WHERE s.status IN ('SELECTED','WAITING'))
-        SELECT count(*) FROM ranked WHERE queue_position IS DISTINCT FROM position
-            OR status IS DISTINCT FROM CASE WHEN position <= capacity THEN 'SELECTED' ELSE 'WAITING' END""",
+        SELECT s.status,
+            greatest(c.capacity - (
+                SELECT count(*) FROM selections f
+                WHERE f.course_id = c.id AND f.status = 'FINAL'
+            ), 0) AS slots,
+            row_number() OVER (PARTITION BY s.course_id ORDER BY s.selected_time, s.id) AS position
+        FROM selections s JOIN courses c ON c.id=s.course_id
+        WHERE s.status IN ('SELECTED','WAITING'))
+        SELECT count(*) FROM ranked
+        WHERE status IS DISTINCT FROM CASE
+            WHEN position <= slots THEN 'SELECTED' ELSE 'WAITING' END""",
 }
 with engine.connect() as connection:
     violations = {name: connection.execute(text(sql)).scalar() for name, sql in queries.items()}

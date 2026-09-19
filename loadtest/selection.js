@@ -1,5 +1,5 @@
 import http from 'k6/http';
-import { check } from 'k6';
+import { check, sleep } from 'k6';
 import { SharedArray } from 'k6/data';
 import exec from 'k6/execution';
 
@@ -7,6 +7,7 @@ const fixtureFile = __ENV.ACCOUNTS_FILE || './accounts.local.json';
 const accounts = new SharedArray('students', () => JSON.parse(open(fixtureFile)).accounts);
 const courses = JSON.parse(open(fixtureFile)).course_ids;
 const users = Number(__ENV.USERS || 1000);
+const startSpreadSeconds = Number(__ENV.START_SPREAD_SECONDS || 0);
 if (users > accounts.length) throw new Error('Not enough distinct test accounts');
 const base = __ENV.BASE_URL;
 if (!base || __ENV.CONFIRM_LOADTEST !== 'true') throw new Error('Set BASE_URL to the isolated test deployment and CONFIRM_LOADTEST=true');
@@ -32,6 +33,7 @@ function call(method, path, account, operation, expected = 200) {
 
 export default function () {
   const index = exec.scenario.iterationInTest;
+  if (startSpreadSeconds > 0) sleep((index / users) * startSpreadSeconds);
   const account = accounts[index];
   const offset = __ENV.MODE === 'hot' ? 0 : index % courses.length;
   const first = courses[offset];

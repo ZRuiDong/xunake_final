@@ -43,14 +43,12 @@ interface StudentOption {
     id:number
     student_no:string
     name:string
-    weight:number
 }
 
 interface SelectionStudent {
     student_id:number
     student_no:string
     name:string
-    weight:number
     status:string
     rank:number | null
 }
@@ -77,7 +75,7 @@ const managementRuleText=computed(()=>{
         return "未开始：可添加或移出课程，可调整课程容量，也可增删学生。"
     }
     if(period.value?.status==="ACTIVE"){
-        return "进行中：可新增课程、调整容量和增删学生；容量变化会立即重排，已有报名的课程不可移出阶段。"
+        return "进行中：可新增课程、调整容量和增删学生；录取按报名先后顺序处理，已有报名的课程不可移出阶段。"
     }
     return "已结束：课程与容量冻结；管理员仍可修正最终名单，移除学生不会自动递补，未录取学生可手动录取。"
 })
@@ -436,7 +434,6 @@ onMounted(loadDetail)
             </el-table-column>
             <el-table-column prop="student_no" label="学号" min-width="120" />
             <el-table-column prop="name" label="姓名" min-width="100" />
-            <el-table-column prop="weight" label="权重" width="80" />
             <el-table-column label="状态" width="100">
                 <template #default="scope">
                     <el-tag :type="statusType(scope.row.status)">{{selectionStatusLabel(scope.row.status)}}</el-tag>

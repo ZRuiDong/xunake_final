@@ -1,5 +1,3 @@
-from math import isfinite
-
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
@@ -8,8 +6,6 @@ class StudentCreate(BaseModel):
     student_no: str = Field(min_length=1, max_length=50)
 
     name: str = Field(min_length=1, max_length=50)
-
-    weight:float
 
     password: str = Field(min_length=6, max_length=128)
 
@@ -21,21 +17,11 @@ class StudentCreate(BaseModel):
             raise ValueError("value cannot be blank")
         return value
 
-    @field_validator("weight")
-    @classmethod
-    def validate_weight(cls, value: float):
-        if not isfinite(value):
-            raise ValueError("weight must be finite")
-        return value
-
-
 class StudentUpdate(BaseModel):
 
     student_no: str = Field(min_length=1, max_length=50)
 
     name: str = Field(min_length=1, max_length=50)
-
-    weight: float
 
     @field_validator("student_no", "name")
     @classmethod
@@ -44,14 +30,6 @@ class StudentUpdate(BaseModel):
         if not value:
             raise ValueError("value cannot be blank")
         return value
-
-    @field_validator("weight")
-    @classmethod
-    def validate_weight(cls, value: float):
-        if not isfinite(value):
-            raise ValueError("weight must be finite")
-        return value
-
 
 class StudentPasswordReset(BaseModel):
 

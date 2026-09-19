@@ -200,7 +200,7 @@ export function createPeriod(
 
 export function updateStudent(
     studentId:number,
-    data:{student_no:string, name:string, weight:number}
+    data:{student_no:string, name:string}
 ){
 
     return request.put(

@@ -33,7 +33,7 @@ class RoundLogicTest(unittest.TestCase):
         )
         self.db.add(self.course)
 
-        for index, weight in enumerate([1.0, 10.0], start=1):
+        for index in range(1, 3):
             user = User(
                 username=f"student-{index}",
                 password_hash="not-used",
@@ -45,7 +45,6 @@ class RoundLogicTest(unittest.TestCase):
                 user_id=user.id,
                 student_no=f"S{index}",
                 name=f"学生{index}",
-                weight=weight,
             ))
 
         self.db.commit()
@@ -69,8 +68,8 @@ class RoundLogicTest(unittest.TestCase):
             "CLOSED",
         )
 
-    def test_weight_ranking_controls_capacity_and_waitlist(self):
-        students = self.db.query(Student).order_by(Student.weight).all()
+    def test_first_application_gets_capacity_and_later_one_waits(self):
+        students = self.db.query(Student).order_by(Student.id).all()
         for index, student in enumerate(students):
             self.db.add(Selection(
                 student_id=student.id,
@@ -83,14 +82,14 @@ class RoundLogicTest(unittest.TestCase):
 
         update_selection_status(self.course.id, self.db)
 
-        low_weight = self.db.query(Selection).filter(
+        first_selection = self.db.query(Selection).filter(
             Selection.student_id == students[0].id
         ).one()
-        high_weight = self.db.query(Selection).filter(
+        later_selection = self.db.query(Selection).filter(
             Selection.student_id == students[1].id
         ).one()
-        self.assertEqual(high_weight.status, "SELECTED")
-        self.assertEqual(low_weight.status, "WAITING")
+        self.assertEqual(first_selection.status, "SELECTED")
+        self.assertEqual(later_selection.status, "WAITING")
 
     def test_final_students_can_exceed_capacity(self):
         students = self.db.query(Student).all()
@@ -110,7 +109,7 @@ class RoundLogicTest(unittest.TestCase):
         self.assertEqual(statuses, ["FINAL", "FINAL"])
 
     def test_finalizing_marks_waitlisted_students_as_rejected(self):
-        students = self.db.query(Student).order_by(Student.weight.desc()).all()
+        students = self.db.query(Student).order_by(Student.id).all()
         self.db.add_all([
             Selection(
                 student_id=students[0].id,

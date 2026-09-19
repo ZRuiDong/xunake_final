@@ -51,22 +51,22 @@ def seed():
 
         student_password = hash_password("123456")
         student_specs = [
-            ("2026001", "张晨", 100),
-            ("2026002", "李雨桐", 90),
-            ("2026003", "王浩然", 80),
-            ("2026004", "赵欣怡", 70),
-            ("2026005", "陈子轩", 60),
-            ("2026006", "刘思涵", 50),
-            ("2026007", "杨博文", 40),
-            ("2026008", "黄佳宁", 30),
-            ("2026009", "周宇航", 20),
-            ("2026010", "吴若曦", 10),
-            ("2026011", "徐嘉乐", 5),
-            ("2026012", "孙可心", 0),
+            ("2026001", "张晨"),
+            ("2026002", "李雨桐"),
+            ("2026003", "王浩然"),
+            ("2026004", "赵欣怡"),
+            ("2026005", "陈子轩"),
+            ("2026006", "刘思涵"),
+            ("2026007", "杨博文"),
+            ("2026008", "黄佳宁"),
+            ("2026009", "周宇航"),
+            ("2026010", "吴若曦"),
+            ("2026011", "徐嘉乐"),
+            ("2026012", "孙可心"),
         ]
         students = []
 
-        for student_no, name, weight in student_specs:
+        for student_no, name in student_specs:
             user = User(
                 username=student_no,
                 password_hash=student_password,
@@ -79,7 +79,6 @@ def seed():
                 user_id=user.id,
                 student_no=student_no,
                 name=name,
-                weight=weight,
             )
             db.add(student)
             students.append(student)

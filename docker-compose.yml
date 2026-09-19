@@ -4,7 +4,7 @@ services:
   postgres:
 
 
-    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/postgres:16
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/postgres:16@sha256:aed885731705b7245c0ff917ced05581234c0fb54637f2931f9ee5b1000f4244
 
 
     container_name: course_postgres
@@ -45,7 +45,7 @@ services:
   redis:
 
 
-    image: redis:7
+    image: redis:7@sha256:91d0f7e8c748ec7a4c2b4fb2c4f84edab794dd91d01e095e38dc906db9d684ab
 
 
     container_name: course_redis

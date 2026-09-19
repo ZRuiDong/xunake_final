@@ -68,6 +68,11 @@ python -m unittest discover -s tests -v
 设置 `TEST_DATABASE_URL` 后会额外运行 PostgreSQL 并发测试。
 测试仅创建并清理随机 `test_selection_*` schema，需具备 CREATE SCHEMA 权限。
 未设置该变量时并发测试明确跳过，SQLite 测试不能替代 PostgreSQL 的锁/触发器验证。
+使用本项目默认的 WSL Docker 名称时，也可以从仓库根目录直接运行：
+
+```sh
+sh backend/tests/run_postgres_concurrency_docker.sh
+```
 
 千人验收步骤：
 
@@ -86,12 +91,15 @@ python ../loadtest/prepare.py --confirm-loadtest --students 1000 --output ../loa
 
 ```sh
 cd loadtest
-BASE_URL=https://测试域名/api CONFIRM_LOADTEST=true MODE=distributed k6 run selection.js
+BASE_URL=https://测试域名/api CONFIRM_LOADTEST=true MODE=distributed START_SPREAD_SECONDS=30 k6 run selection.js
+BASE_URL=https://测试域名/api CONFIRM_LOADTEST=true MODE=distributed START_SPREAD_SECONDS=5 k6 run selection.js
 BASE_URL=https://测试域名/api CONFIRM_LOADTEST=true MODE=hot k6 run selection.js
 ```
 
-**两种测试必须分别使用空库及新的 fixture**，重复使用原库会混合前次选择。
-脚本每个测试学生使用独立账号，1000 并发开始，覆盖课程查询、选两门、拒绝第三门、
+先用 30 秒启动窗口验证 1000 人在线，再缩短到 5 秒验证开课峰值；`hot` 是所有人争抢
+同一课程的极限测试，不等同于正常验收场景。**每轮必须分别使用空库及新的 fixture**，
+重复使用原库会混合前次选择。
+脚本每个测试学生使用独立账号，保持 1000 VU，覆盖课程查询、选两门、拒绝第三门、
 重复提交、退课重选及个人结果检查。它预生成令牌，**不测同时登录**；登录峰值需另测 bcrypt CPU 开销。
 
 4. 从 `backend` 使用相同测试库配置执行 `python ../loadtest/verify.py`。
@@ -104,6 +112,8 @@ BASE_URL=https://测试域名/api CONFIRM_LOADTEST=true MODE=hot k6 run selectio
 
 系统仍按单学期使用，每人最多两门有效选择（候补也占正在申请的名额），
 未录取历史不占名额；阶段结束后学生不能自行修改最终名单，由管理员更正。
+普通选课严格按服务器取得课程写锁后的报名时间和记录 ID 先到先得；满员后进入候补，
+退课或扩容时按同一顺序递补。管理员手动录取仍可在确认后超出课程容量。
 目前上课时间是自由文本，不自动判断两门课程的时间冲突。
 跨学期复用和自动冲突检查需要明确学期/周次/节次规则后增加结构化数据，不能靠猜测文本解决。
 

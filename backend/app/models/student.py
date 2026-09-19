@@ -44,6 +44,8 @@ class Student(Base):
     )
 
 
+    # Deprecated compatibility column. Admission is first-come-first-served;
+    # retaining it avoids rewriting the students table during deployment.
     weight = Column(
         Float,
         default=0,

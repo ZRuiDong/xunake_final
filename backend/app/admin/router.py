@@ -133,7 +133,6 @@ def serialize_student(db: Session, student: Student):
         "id": student.id,
         "student_no": student.student_no,
         "name": student.name,
-        "weight": student.weight,
         "selected_course_id": first_course["id"] if first_course else None,
         "selected_course_name": first_course["name"] if first_course else None,
         "selection_status": first_course["status"] if first_course else None,
@@ -167,7 +166,6 @@ def create_student(
         user_id=user.id,
         student_no=data.student_no,
         name=data.name,
-        weight=data.weight,
     )
     db.add(student)
     db.commit()
@@ -263,7 +261,6 @@ async def import_students(
                 user_id=user.id,
                 student_no=record.student_no,
                 name=record.name,
-                weight=record.weight,
             )
             for user, record in zip(users, records)
         ])
@@ -335,7 +332,6 @@ def get_available_students(
             "id": student.id,
             "student_no": student.student_no,
             "name": student.name,
-            "weight": student.weight,
         }
         for student in students
     ]
@@ -442,23 +438,6 @@ def update_student(
     db: Session = Depends(get_db),
     admin=Depends(admin_required),
 ):
-    sync_period_statuses(db)
-    # Weight affects all of this student's courses. Take stage gates before
-    # reading their choices, including choices added by an in-flight request.
-    locked_periods = {
-        period.id: period for period in db.query(Period).order_by(Period.id)
-        .populate_existing().with_for_update().all()
-    }
-    sync_period_statuses(db, commit=False)
-    db.flush()
-    student_snapshot = db.query(Student).filter(Student.id == student_id).first()
-    if not student_snapshot:
-        raise HTTPException(status_code=404, detail="student not found")
-
-    selection_snapshots = db.query(Selection).filter(
-        Selection.student_id == student_id,
-        Selection.status.in_(BLOCKING_SELECTION_STATUSES),
-    ).order_by(Selection.course_id).all()
     student = db.query(Student).filter(
         Student.id == student_id
     ).with_for_update().first()
@@ -480,25 +459,9 @@ def update_student(
     if not user:
         raise HTTPException(status_code=404, detail="student account not found")
 
-    course_ids = sorted({item.course_id for item in selection_snapshots})
-    if course_ids:
-        db.query(Course).filter(Course.id.in_(course_ids)).order_by(
-            Course.id
-        ).with_for_update().all()
-    selections = db.query(Selection).filter(
-        Selection.student_id == student.id,
-        Selection.status.in_(BLOCKING_SELECTION_STATUSES),
-    ).order_by(Selection.course_id).with_for_update().all()
-    old_weight = student.weight
     student.student_no = data.student_no
     student.name = data.name
-    student.weight = data.weight
     user.username = data.student_no
-    if old_weight != data.weight:
-        for selection in selections:
-            period = locked_periods.get(selection.period_id)
-            if not period or period.status != "CLOSED":
-                update_selection_status(selection.course_id, db, commit=False)
 
     try:
         db.commit()
@@ -981,7 +944,6 @@ def get_course_students(
             "student_id": item.Student.id,
             "student_no": item.Student.student_no,
             "name": item.Student.name,
-            "weight": item.Student.weight,
             "status": item.Selection.status,
             "rank": None if item.Selection.status == "REJECTED" else rank,
             "selected_time": item.Selection.selected_time,

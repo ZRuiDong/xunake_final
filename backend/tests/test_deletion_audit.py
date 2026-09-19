@@ -15,7 +15,7 @@ class DeletionAuditTest(unittest.TestCase):
             user = User(username="audit", password_hash="not-to-be-exported", role="STUDENT")
             db.add(user)
             db.flush()
-            student = Student(user_id=user.id, student_no="audit", name="audit student", weight=2)
+            student = Student(user_id=user.id, student_no="audit", name="audit student")
             db.add(student)
             db.commit()
             bulk_delete_students(BulkDeleteRequest(ids=[student.id]), db=db, admin="admin")

@@ -60,7 +60,6 @@ class SelectionExportTest(unittest.TestCase):
                 user_id=user.id,
                 student_no=f"S{index:03d}",
                 name=f"测试学生{index}",
-                weight=10 - index,
             )
             self.db.add(student)
             self.db.flush()
@@ -95,8 +94,8 @@ class SelectionExportTest(unittest.TestCase):
         self.assertEqual(summary["J5"].value, 1)
         self.assertEqual(summary["B6"].value, "篮球基础")
         self.assertEqual(details["F5"].value, "S001")
-        self.assertEqual(details["I6"].value, "候补中")
-        self.assertEqual(details["I7"].value, "未录取")
+        self.assertEqual(details["H6"].value, "候补中")
+        self.assertEqual(details["H7"].value, "未录取")
         workbook.close()
 
     def test_course_workbook_contains_course_overview_and_ranked_students(self):
@@ -116,10 +115,10 @@ class SelectionExportTest(unittest.TestCase):
         self.assertEqual(sheet["A1"].value, "绘画基础 · 选课情况")
         self.assertIn("课程容量：1", sheet["A2"].value)
         self.assertEqual(sheet["B5"].value, "S001")
-        self.assertEqual(sheet["E6"].value, "候补中")
-        self.assertEqual(sheet["G6"].value, "候补")
+        self.assertEqual(sheet["D6"].value, "候补中")
+        self.assertEqual(sheet["F6"].value, "候补")
         self.assertEqual(sheet["A7"].value, "-")
-        self.assertEqual(sheet["E7"].value, "未录取")
+        self.assertEqual(sheet["D7"].value, "未录取")
         workbook.close()
 
 

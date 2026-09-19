@@ -64,7 +64,7 @@ class StateIntegrityTest(unittest.TestCase):
         self.db.flush()
         return period, course
 
-    def create_student(self, suffix, weight):
+    def create_student(self, suffix, _unused_priority=None):
         user = User(
             username=f"S{suffix}",
             password_hash="test",
@@ -76,7 +76,6 @@ class StateIntegrityTest(unittest.TestCase):
             user_id=user.id,
             student_no=f"S{suffix}",
             name=f"学生{suffix}",
-            weight=weight,
         )
         self.db.add(student)
         self.db.flush()
@@ -298,7 +297,7 @@ class StateIntegrityTest(unittest.TestCase):
         self.db.refresh(course)
         self.assertIsNone(course.period_id)
 
-    def test_student_update_changes_account_and_recalculates_ranking(self):
+    def test_student_update_changes_account_without_changing_selection_order(self):
         period, course = self.create_period("ACTIVE", capacity=1)
         user_one, student_one = self.create_student("021", 1)
         _, student_two = self.create_student("022", 10)
@@ -320,7 +319,7 @@ class StateIntegrityTest(unittest.TestCase):
 
         update_student(
             student_one.id,
-            StudentUpdate(student_no="S099", name="新姓名", weight=20),
+            StudentUpdate(student_no="S099", name="新姓名"),
             db=self.db,
             admin="admin",
         )
@@ -332,7 +331,7 @@ class StateIntegrityTest(unittest.TestCase):
         ).one()
         self.assertEqual(student_one.student_no, "S099")
         self.assertEqual(user_one.username, "S099")
-        self.assertEqual(selection.status, "SELECTED")
+        self.assertEqual(selection.status, "WAITING")
 
     def test_student_can_select_two_courses_but_not_a_third(self):
         period, course = self.create_period("ACTIVE", capacity=2)
@@ -415,6 +414,35 @@ class StateIntegrityTest(unittest.TestCase):
         self.assertEqual(result["status"], "SELECTED")
         self.assertEqual(selection.course_id, second_course.id)
 
+    def test_cancel_promotes_the_earliest_waiting_student(self):
+        _, course = self.create_period("ACTIVE", capacity=1)
+        users_and_students = [
+            self.create_student(f"queue{index}", index)
+            for index in range(3)
+        ]
+        self.db.commit()
+
+        for user, _ in users_and_students:
+            select_course(course.id, db=self.db, username=user.username)
+
+        cancel_course(
+            course.id,
+            db=self.db,
+            username=users_and_students[0][0].username,
+        )
+
+        queue = self.db.query(Selection).filter(
+            Selection.course_id == course.id,
+        ).order_by(Selection.selected_time, Selection.id).all()
+        self.assertEqual(
+            [item.student_id for item in queue],
+            [users_and_students[1][1].id, users_and_students[2][1].id],
+        )
+        self.assertEqual(
+            [item.status for item in queue],
+            ["SELECTED", "WAITING"],
+        )
+
     def test_active_period_accepts_new_courses(self):
         period, _ = self.create_period("ACTIVE")
         course = Course(name="进行中新增课程", capacity=10, status="OPEN")
@@ -434,17 +462,17 @@ class StateIntegrityTest(unittest.TestCase):
 
     def test_active_capacity_change_reranks_non_final_students(self):
         period, course = self.create_period("ACTIVE", capacity=2)
-        _, high = self.create_student("061", 10)
-        _, low = self.create_student("062", 1)
+        _, first = self.create_student("061", 10)
+        _, later = self.create_student("062", 1)
         self.db.add_all([
             Selection(
-                student_id=high.id,
+                student_id=first.id,
                 course_id=course.id,
                 period_id=period.id,
                 status="SELECTED",
             ),
             Selection(
-                student_id=low.id,
+                student_id=later.id,
                 course_id=course.id,
                 period_id=period.id,
                 status="SELECTED",
@@ -463,8 +491,8 @@ class StateIntegrityTest(unittest.TestCase):
             item.student_id: item.status
             for item in self.db.query(Selection).all()
         }
-        self.assertEqual(statuses[high.id], "SELECTED")
-        self.assertEqual(statuses[low.id], "WAITING")
+        self.assertEqual(statuses[first.id], "SELECTED")
+        self.assertEqual(statuses[later.id], "WAITING")
 
     def test_expired_active_period_is_closed_before_selection_write(self):
         period, _ = self.create_period("ACTIVE")

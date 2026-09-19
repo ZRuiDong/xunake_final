@@ -1,13 +1,11 @@
 from dataclasses import dataclass
 from io import BytesIO
-from math import isfinite
-
 from openpyxl import Workbook, load_workbook
 from openpyxl.comments import Comment
 from openpyxl.styles import Alignment, Font, PatternFill
 
 
-EXPECTED_HEADERS = ("学号", "姓名", "权重")
+EXPECTED_HEADERS = ("学号", "姓名")
 MAX_IMPORT_ROWS = 2000
 
 
@@ -16,7 +14,6 @@ class StudentImportRecord:
     row_number: int
     student_no: str
     name: str
-    weight: float
 
 
 class StudentImportValidationError(Exception):
@@ -40,10 +37,8 @@ def build_student_template():
 
     sheet["A1"].comment = Comment("必填；请将学号列设置为文本，避免丢失前导零。", "系统")
     sheet["B1"].comment = Comment("必填；最长 50 个字符。", "系统")
-    sheet["C1"].comment = Comment("必填；请输入数字，数值越大选课排序越靠前。", "系统")
     sheet.column_dimensions["A"].width = 22
     sheet.column_dimensions["B"].width = 18
-    sheet.column_dimensions["C"].width = 14
     sheet.column_dimensions["A"].number_format = "@"
 
     output = BytesIO()
@@ -70,17 +65,17 @@ def parse_student_workbook(content: bytes):
         raise StudentImportValidationError(["无法读取文件，请确认文件是有效的 .xlsx 文件"]) from error
 
     sheet = workbook.active
-    headers = tuple(normalize_text(sheet.cell(1, column).value) for column in range(1, 4))
+    headers = tuple(normalize_text(sheet.cell(1, column).value) for column in range(1, 3))
     errors = []
 
     if headers != EXPECTED_HEADERS:
-        errors.append("第 1 行表头必须依次为：学号、姓名、权重")
+        errors.append("第 1 行表头必须依次为：学号、姓名")
 
     if any(
         normalize_text(sheet.cell(1, column).value)
-        for column in range(4, sheet.max_column + 1)
+        for column in range(3, sheet.max_column + 1)
     ):
-        errors.append("模板只能包含学号、姓名、权重三列")
+        errors.append("模板只能包含学号、姓名两列")
 
     records = []
     seen_student_numbers = set()
@@ -90,13 +85,12 @@ def parse_student_workbook(content: bytes):
         sheet.iter_rows(min_row=2, values_only=True),
         start=2,
     ):
-        first_three = tuple(values[:3]) + (None,) * max(0, 3 - len(values))
-        student_no = normalize_text(first_three[0])
-        name = normalize_text(first_three[1])
-        raw_weight = first_three[2]
-        extra_values = values[3:]
+        first_two = tuple(values[:2]) + (None,) * max(0, 2 - len(values))
+        student_no = normalize_text(first_two[0])
+        name = normalize_text(first_two[1])
+        extra_values = values[2:]
 
-        if not student_no and not name and raw_weight in (None, "") and not any(
+        if not student_no and not name and not any(
             normalize_text(value) for value in extra_values
         ):
             continue
@@ -119,18 +113,8 @@ def parse_student_workbook(content: bytes):
         elif len(name) > 50:
             row_errors.append("姓名不能超过 50 个字符")
 
-        try:
-            if isinstance(raw_weight, bool) or raw_weight in (None, ""):
-                raise ValueError()
-            weight = float(raw_weight)
-            if not isfinite(weight):
-                raise ValueError()
-        except (TypeError, ValueError):
-            weight = 0
-            row_errors.append("权重必须是有效数字")
-
         if any(normalize_text(value) for value in extra_values):
-            row_errors.append("只能填写学号、姓名、权重三列")
+            row_errors.append("只能填写学号、姓名两列")
 
         if row_errors:
             errors.append(f"第 {row_number} 行：{'；'.join(row_errors)}")
@@ -141,7 +125,6 @@ def parse_student_workbook(content: bytes):
             row_number=row_number,
             student_no=student_no,
             name=name,
-            weight=weight,
         ))
 
     workbook.close()

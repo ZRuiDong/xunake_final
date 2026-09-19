@@ -13,7 +13,8 @@ from app.utils.period import app_now, get_active_period, get_locked_active_perio
 from app.utils.selection import (
     MAX_COURSES_PER_STUDENT,
     calculate_ranking,
-    update_selection_status,
+    insert_selection_into_ranking,
+    remove_selection_from_ranking,
 )
 
 
@@ -188,10 +189,6 @@ def select_course(
             detail="student can select at most two courses",
         )
 
-    selected_count = db.query(Selection).filter(
-        Selection.course_id == course_id,
-        Selection.status.in_(["SELECTED", "FINAL"]),
-    ).count()
     selection = db.query(Selection).filter(
         Selection.student_id == student.id,
         Selection.period_id == period.id,
@@ -201,7 +198,7 @@ def select_course(
     if selection:
         selection.course_id = course_id
         selection.selected_time = app_now()
-        selection.status = "SELECTED" if selected_count < course.capacity else "WAITING"
+        selection.status = "WAITING"
         selection.queue_position = None
     else:
         selection = Selection(
@@ -209,11 +206,10 @@ def select_course(
             course_id=course_id,
             period_id=period.id,
             selected_time=app_now(),
-            status="SELECTED" if selected_count < course.capacity else "WAITING",
+            status="WAITING",
         )
         db.add(selection)
-    db.flush()
-    update_selection_status(course_id, db, commit=False)
+    insert_selection_into_ranking(course, selection, db)
     db.commit()
     db.refresh(selection)
 
@@ -280,8 +276,9 @@ def cancel_course(
     if selection.status == "FINAL":
         raise HTTPException(status_code=400, detail="course already finalized")
 
+    removed_status = selection.status
     db.delete(selection)
     db.flush()
-    update_selection_status(course_id, db, commit=False)
+    remove_selection_from_ranking(course, removed_status, db)
     db.commit()
     return {"message": "cancel success"}

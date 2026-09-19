@@ -47,7 +47,6 @@ class PasswordManagementTest(unittest.TestCase):
             user_id=self.student_user.id,
             student_no="2026001",
             name="测试学生",
-            weight=0,
         )
         self.db.add(self.student)
         self.db.commit()
