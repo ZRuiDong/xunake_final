@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from app.admin.router import reset_student_password
 from app.admin.schema import StudentPasswordReset
 from app.auth.router import change_password
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import authenticate_token, get_current_user
 from app.auth.schema import PasswordChangeRequest
 from app.auth.security import create_token, hash_password, verify_password
 from app.database import Base
@@ -28,7 +28,8 @@ class PasswordManagementTest(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite:///:memory:")
         Base.metadata.create_all(self.engine)
-        self.db = sessionmaker(bind=self.engine)()
+        self.Session = sessionmaker(bind=self.engine)
+        self.db = self.Session()
 
         self.admin = User(
             username="admin",
@@ -98,8 +99,18 @@ class PasswordManagementTest(unittest.TestCase):
         self.assertTrue(verify_password("reset-123456", student_user.password_hash))
         self.assertTrue(student_user.must_change_password)
         with self.assertRaises(HTTPException) as context:
-            get_current_user(token=old_token, db=self.db)
+            authenticate_token(old_token, self.db)
         self.assertEqual(context.exception.status_code, 401)
+
+    def test_request_authentication_releases_its_database_session(self):
+        from unittest.mock import patch
+
+        token = create_token(self.student_user)
+        session = self.Session()
+        with patch("app.auth.dependencies.SessionLocal", return_value=session):
+            self.assertEqual(get_current_user(token=token), self.student_user.username)
+
+        self.assertFalse(session.is_active and session.in_transaction())
 
 
 if __name__ == "__main__":
